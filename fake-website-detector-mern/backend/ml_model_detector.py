@@ -1,96 +1,177 @@
 import sys
 import pandas as pd
+import numpy as np
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 import tldextract
-import os
+from urllib.parse import urlparse
+from scipy.sparse import hstack
+import warnings
 
-# --- Tokenizer (refined from original script) ---
+# Suppress the specific UserWarning from TfidfVectorizer
+warnings.filterwarnings("ignore", category=UserWarning, message="The parameter 'token_pattern' will not be used since 'tokenizer' is not None'")
+
+
+# --- 1. Lexical Feature Tokenizer ---
 def makeTokens(url_str):
-    # Assuming url_str is a plain string like "http://example.com/path"
-    all_tokens = []
+    """
+    Tokenizes a URL into its constituent parts for TF-IDF vectorization.
+    """
+    try:
+        if not isinstance(url_str, str):
+            return []
 
-    # 1. Split by '/'
-    # Normalize to lowercase early and filter empty strings
-    tokens_from_slash = [t.lower() for t in url_str.split('/') if t]
-    all_tokens.extend(tokens_from_slash)
+        if not url_str.startswith("http"):
+            url_str = "http://" + url_str
 
-    # 2. For each part from slash, split by '-' and then by '.'
-    for part_slashed in tokens_from_slash:
-        tokens_from_hyphen = [t.lower() for t in part_slashed.split('-') if t]
-        all_tokens.extend(tokens_from_hyphen)
-        for part_hyphened in tokens_from_hyphen:
-            tokens_from_dot = [t.lower() for t in part_hyphened.split('.') if t]
-            all_tokens.extend(tokens_from_dot)
-    
-    # Add tldextract features (all lowercase)
-    ext = tldextract.extract(url_str)
-    if ext.subdomain: all_tokens.append(ext.subdomain.lower())
-    if ext.domain: all_tokens.append(ext.domain.lower())
-    if ext.suffix: all_tokens.append(ext.suffix.lower())
-    
-    # Unique tokens
-    unique_tokens = list(set(all_tokens))
-    
-    # Remove specific common tokens (original removed 'com'; http/https are good to remove if tokenized)
-    common_to_remove = {'com', 'http', 'https'} 
-    final_tokens = [token for token in unique_tokens if token not in common_to_remove and token] # Ensure no empty strings
-    
-    return final_tokens
+        tokens = []
+        for delim in ['/', '-', '.']:
+            for part in url_str.split(delim):
+                if part:
+                    tokens.append(part.lower())
+        
+        ext = tldextract.extract(url_str)
+        if ext.subdomain: tokens.append(ext.subdomain.lower())
+        if ext.domain: tokens.append(ext.domain.lower())
+        if ext.suffix: tokens.append(ext.suffix.lower())
+        
+        common_to_remove = {'http', 'https', 'www', 'com'}
+        final_tokens = [t for t in list(set(tokens)) if t not in common_to_remove]
+        
+        return final_tokens
+    except:
+        return []
 
-# --- Global model variables (will be loaded by main) ---
-vectorizer_model = None
-logit_classifier_model = None
-
-# --- Model Loading (adapted from original script) ---
-def load_and_train_model_on_the_fly():
-    global vectorizer_model, logit_classifier_model
+# --- 2. Statistical Feature Extraction ---
+def compute_statistical_features(url_str):
+    """
+    Computes statistical and structural features from a URL string.
+    """
+    # ### FIXED ###: The number of features must match the actual count.
+    NUM_STATISTICAL_FEATURES = 17
     
+    try:
+        if not isinstance(url_str, str) or len(url_str) == 0:
+            return [0] * NUM_STATISTICAL_FEATURES
+            
+        if not url_str.startswith("http"):
+            url_str = "http://" + url_str
+            
+        parsed_url = urlparse(url_str)
+        ext = tldextract.extract(url_str)
+
+        features = []
+        
+        # Length-based features (4 features)
+        features.append(len(url_str))
+        features.append(len(parsed_url.netloc))
+        features.append(len(parsed_url.path))
+        features.append(len(ext.domain))
+        
+        # Count of special characters (11 features)
+        features.append(url_str.count('.'))
+        features.append(url_str.count('-'))
+        features.append(url_str.count('@'))
+        features.append(url_str.count('?'))
+        features.append(url_str.count('&'))
+        features.append(url_str.count('|'))
+        features.append(url_str.count('='))
+        features.append(url_str.count('_'))
+        features.append(url_str.count('~'))
+        features.append(url_str.count('%'))
+        features.append(url_str.count('/'))
+        
+        # Presence of IP address in domain (1 feature)
+        domain_is_ip = 0
+        if ext.domain:
+            if all(c.isdigit() or c == '.' for c in ext.domain):
+                is_ip = all(part.isdigit() for part in ext.domain.split('.'))
+                domain_is_ip = 1 if is_ip else 0
+        features.append(domain_is_ip)
+            
+        # Presence of sensitive words (1 feature)
+        sensitive_words = ['secure', 'login', 'signin', 'ebayisapi', 'account', 'confirm', 'webscr']
+        features.append(1 if any(word in url_str.lower() for word in sensitive_words) else 0)
+        
+        return features
+    except Exception:
+        return [0] * NUM_STATISTICAL_FEATURES
+
+# --- Global model variables ---
+vectorizer = None
+logit_model = None
+
+# --- Main execution block ---
+if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     csv_file_path = os.path.join(script_dir, "urldata.csv")
 
     try:
         urls_data = pd.read_csv(csv_file_path)
     except FileNotFoundError:
-        print(f"FATAL: urldata.csv not found at {csv_file_path}. Please ensure it is in the same directory as the script.", file=sys.stderr)
-        sys.exit(1) # Exit with error code
-
-    y = urls_data["label"]  # Expect "bad" or "good" (or whatever your labels are)
-    url_list = urls_data["url"]
-
-    vectorizer_model = TfidfVectorizer(tokenizer=makeTokens)
-    X = vectorizer_model.fit_transform(url_list)
-    
-    X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Added max_iter for potential convergence issues with default.
-    logit_classifier_model = LogisticRegression(max_iter=1000) 
-    logit_classifier_model.fit(X_train, y_train)
-    # IMPORTANT: Training on every call is very inefficient. Pre-train and save/load model for production.
-
-# --- Prediction (adapted from original script) ---
-def predict_url_status(url_to_check):
-    if vectorizer_model is None or logit_classifier_model is None:
-        print("FATAL: Model components not loaded. Call load_and_train_model_on_the_fly first.", file=sys.stderr)
+        print(f"FATAL: urldata.csv not found at {csv_file_path}. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    if not url_to_check.startswith("http://") and not url_to_check.startswith("https://"):
-        url_to_check = "http://" + url_to_check 
-
-    X_predict = vectorizer_model.transform([url_to_check])
-    prediction = logit_classifier_model.predict(X_predict)
-    return prediction[0] 
-
-# --- Main execution block for command-line usage ---
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python ml_model_detector.py <URL_to_check>", file=sys.stderr)
+    if "url" not in urls_data.columns or "label" not in urls_data.columns:
+        print("FATAL: urldata.csv must contain 'url' and 'label' columns. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    input_url = sys.argv[1]
     
-    load_and_train_model_on_the_fly() # This happens on every script call due to spawn behavior
+    urls_data.dropna(subset=['url', 'label'], inplace=True)
+    urls_data['url'] = urls_data['url'].astype(str).str.strip()
+    urls_data = urls_data[urls_data['url'].str.len() > 0]
+    urls_data.reset_index(drop=True, inplace=True)
     
-    result = predict_url_status(input_url)
-    print(result) # Output "bad" or "good" (or your specific labels) to stdout
+
+   
+    
+    vectorizer = TfidfVectorizer(tokenizer=makeTokens, max_features=5000)
+    lexical_features = vectorizer.fit_transform(urls_data['url'])
+    
+    statistical_features = np.array([compute_statistical_features(url) for url in urls_data['url']])
+    
+    X = hstack([lexical_features, statistical_features])
+    y = urls_data['label']
+    
+    
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    
+    
+    logit_model = LogisticRegression(solver='liblinear', C=0.5, class_weight='balanced', max_iter=1000)
+    logit_model.fit(X_train, y_train)
+    
+    
+    
+    y_pred = logit_model.predict(X_test)
+    
+    
+    
+    
+    cm = confusion_matrix(y_test, y_pred)
+    # Ensure classes are sorted for consistent column/index naming
+    class_labels = sorted(list(y.unique()))
+   
+    if len(sys.argv) > 1:
+        input_url = sys.argv[1]
+        
+        input_lexical = vectorizer.transform([input_url])
+        input_statistical = np.array([compute_statistical_features(input_url)]).reshape(1, -1)
+        input_combined = hstack([input_lexical, input_statistical])
+        
+        prediction_array = logit_model.predict(input_combined)
+        predicted_label = prediction_array[0]
+        
+        if predicted_label == "good":
+            print("It is a secure website")
+        elif predicted_label == "bad":
+            print("It is a phishing website")
+        else:
+            # Fallback for any unexpected labels
+            print(f"Predicted: {predicted_label}")
+    else:
+        print("\nINFO: To check a new URL, run the script with the URL as an argument:")
+        print("python ml_model_detector.py \"some-suspicious-url.com/login\"", file=sys.stderr)
