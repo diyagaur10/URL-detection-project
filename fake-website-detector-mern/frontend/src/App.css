@@ -8,7 +8,9 @@
 }
 
 h1 {
-  color: #333;
+  color: #a78bfa; /* Vibrant purple heading */
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.5); /* Subtle glow */
+  animation: pulse 2s infinite alternate; /* Add pulse animation */
 }
 
 form {
@@ -20,26 +22,51 @@ input[type="text"] {
   padding: 12px 15px;
   margin-right: 10px;
   width: 350px;
-  border: 1px solid #ccc;
+  border: 1px solid #3a3a5a; /* Darker border */
   border-radius: 5px;
   font-size: 16px;
+  background-color: #2a2a4a; /* Darker input background */
+  color: #e0e0e0; /* Light input text */
+  transition: border-color 0.3s ease; /* Smooth transition for focus */
+}
+
+input[type="text"]::placeholder {
+  color: #b0b0b0; /* Lighter placeholder text */
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #a78bfa; /* Vibrant purple border on focus */
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.6); /* Glow effect on focus */
 }
 
 button {
   padding: 12px 20px;
-  background-color: #007bff;
+  background-color: #a78bfa; /* Vibrant purple button */
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   font-size: 16px;
+  transition: background-color 0.3s ease, transform 0.1s ease; /* Smooth transitions */
 }
 
 button:hover {
-  background-color: #0056b3;
+  background-color: #8b5cf6; /* Slightly darker purple on hover */
+  transform: translateY(-2px); /* Subtle lift effect */
 }
 
 button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+/* Keyframes for pulse animation */
+@keyframes pulse {
+  0% {
+    text-shadow: 0 0 10px rgba(167, 139, 250, 0.5);
+  }
+  100% {
+    text-shadow: 0 0 20px rgba(167, 139, 250, 0.8);
+  }
 }

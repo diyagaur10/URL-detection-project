@@ -1,10 +1,14 @@
 body {
   margin: 0;
-  font-family: 'Arial', sans-serif; /* Example: Changed font */
+  font-family: 'Arial', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f4f7f6; /* Light background for the whole page */
-  color: #333;
+  /* Fallback background color if the image doesn't load or for layering */
+  background-color: #1a1a2e; 
+ 
+  
+  color: #e0e0e0; 
+  min-height: 100vh; 
 }
 
 code {
