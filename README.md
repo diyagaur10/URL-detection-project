@@ -21,3 +21,40 @@ Customizable background for a personalized look.
 **Custom URL Feature Extraction:**
 
 Extracts key components like subdomains, domains, suffixes, and tokenized elements of the URL to enhance model accuracy.
+
+```
+URL-detection-project
+├─ fake-website-detector-mern
+│  ├─ backend
+│  │  ├─ ml_model_detector.py
+│  │  ├─ package-lock.json
+│  │  ├─ package.json
+│  │  ├─ server.js
+│  │  └─ urldata.csv
+│  └─ frontend
+│     ├─ package-lock.json
+│     ├─ package.json
+│     ├─ public
+│     │  ├─ index.html
+│     │  ├─ manifest.json
+│     │  ├─ purple.jpg
+│     │  └─ robots.txt
+│     ├─ README.md
+│     └─ src
+│        ├─ App.css
+│        ├─ App.js
+│        ├─ App.test.js
+│        ├─ components
+│        │  └─ Detector.js
+│        ├─ index.css
+│        ├─ index.js
+│        ├─ logo.svg
+│        ├─ reportWebVitals.js
+│        └─ setupTests.js
+├─ ml_&_tkinter.py
+├─ README.md
+├─ Screenshot (1).png
+├─ Screenshot (2).png
+└─ Screenshot (3).png
+
+```
